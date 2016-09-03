@@ -1,0 +1,4 @@
+git+https://github.com/penzance/canvas_python_sdk@master#egg=canvas_python_sdk==0.8.3
+python-dotenv==0.5.1
+python-dateutil==2.5.3
+xlwt==1.0.0
