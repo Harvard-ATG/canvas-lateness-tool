@@ -45,10 +45,11 @@ def api_get_submissions(request_context, course_id, assignment_ids):
 
     https://canvas.instructure.com/doc/api/submissions.html#method.submissions_api.index
     '''
-    logging.info("API fetching submissions for course %s and assignment_ids: %s" % (course_id, ', '.join(map(str, assignment_ids))))
+    logging.info("API fetching submissions for course %s and %d assignments (assignment_ids: %s)" % (course_id, len(assignment_ids), ', '.join(map(str, assignment_ids))))
     include = "assignment"
     results = []
-    for assignment_id in assignment_ids:
+    for position, assignment_id in enumerate(assignment_ids, start=1):
+        logging.info("[%d of %d] Fetching submissions for assignment_id: %d..." % (position, len(assignment_ids), assignment_id))
         list_data = get_all_list_data(request_context, submissions.list_assignment_submissions_courses, course_id, assignment_id, include)
         logging.debug("Submissions for assignment %s: %s" % (assignment_id, list_data))
         results.append({"assignment_id": assignment_id, "submissions": list_data})
@@ -118,7 +119,7 @@ def process(data):
             if len(assignment_subs) == 0 or not assignment['due_at']:
                 continue
 
-            student_assignment_subs = submissions_by_student[student_id].get(assignment_id, [])
+            student_assignment_subs = submissions_by_student.get(student_id, {}).get(assignment_id, [])
 
             # parse the assignment due date
             due_date_iso = assignment['due_at']
@@ -141,12 +142,10 @@ def process(data):
 
             # calculate the delta
             time_delta = None
-            time_delta_compact = ''
-            time_delta_seconds = ''
+            time_delta_seconds = None
             if due_date and sub_date:
                 time_delta = sub_date - due_date
-                time_delta_compact = '{days}d{seconds}s'.format(days=time_delta.days, seconds=time_delta.seconds)
-                time_delta_seconds = '%d' % time_delta.total_seconds()
+                time_delta_seconds = int(time_delta.total_seconds())
                 
             # accumulate the total lateness
             if time_delta is not None and time_delta > zero_delta:
@@ -160,14 +159,12 @@ def process(data):
                 'due_date_display': due_date_display,
                 'submission_date_iso': sub_date_iso,
                 'submission_date_display': sub_date_display,
-                'time_delta_compact': time_delta_compact,
                 'time_delta_seconds': time_delta_seconds,
             })
 
         # update total delta
-        student_result['total_lateness_compact'] = '{days}d{seconds}s'.format(days=total_lateness.days, seconds=total_lateness.seconds)
-        student_result['total_lateness_seconds'] = '%d' % total_lateness.total_seconds()
-        student_result['total_lateness_hours'] = '%d' % int(total_lateness.total_seconds() / 3600) # round down to be nice
+        student_result['total_lateness_seconds'] = int(total_lateness.total_seconds())
+        student_result['total_lateness_hours'] = int(total_lateness.total_seconds() / 3600) # round down to be nice
 
         results.append(student_result)
 
@@ -204,7 +201,7 @@ def create_spreadsheet(filename, data, results):
     # Styles
     bold_style = xlwt.easyxf('font: bold 1')
     right_align = xlwt.easyxf("align: horiz right")
-    numeric_style = xlwt.easyxf('', '0')
+    delta_style = xlwt.easyxf(num_format_str='[Red]###,###,##0;[Blue]-###,###,##0;[Black]0')
 
     student_fmt = u'{sortable_name} ({id})'
     student_width = 256 * max([len(student_fmt.format(**s)) for s in data['students']])
@@ -226,16 +223,16 @@ def create_spreadsheet(filename, data, results):
         for asstpos, asst in enumerate(result['assignments']):
             assignment_name_str = u'{name} ({id})'.format(name=asst['assignment_name'], id=asst['assignment_id'])
             columns = (
-                (u'Due'.encode('utf-8'), asst['due_date_display']),
-                (u'Submitted'.encode('utf-8'), asst['submission_date_display']),
-                (u'Delta (seconds)'.encode('utf-8'), asst['time_delta_seconds']),
+                ('Due', asst['due_date_iso']),
+                ('Submitted', asst['submission_date_iso']),
+                ('Delta (seconds)', asst['time_delta_seconds'], delta_style),
             )
             colstart = asstpos * len(columns) + 1
 
             ws.write(0, colstart, assignment_name_str, bold_style)
             for colpos, column in enumerate(columns):
                 ws.write(1, colstart+colpos, column[0], bold_style) # column header
-                ws.write(row, colstart+colpos, column[1]) # column value for student
+                ws.write(row, colstart+colpos, *column[1:]) # column value for student
         row += 1
 
     # Worksheet #2 w/ Cumulative Lateness
@@ -248,9 +245,8 @@ def create_spreadsheet(filename, data, results):
         student_name_str = student_fmt.format(sortable_name=result['student_name'], id=result['student_id']) 
         ws.write(row, 0, student_name_str)
         columns = (
-            (u'Total (compact)'.encode('utf-8'), result['total_lateness_compact']),
-            (u'Total (hours)'.encode('utf-8'), result['total_lateness_hours'], numeric_style),
-            (u'Total (seconds)'.encode('utf-8'), result['total_lateness_seconds'], numeric_style),
+            ('Total in hours', result['total_lateness_hours'], delta_style),
+            ('Total in seconds', result['total_lateness_seconds'], delta_style),
         )
         colstart = 1
         for colpos, column in enumerate(columns):
@@ -270,9 +266,6 @@ def main():
     parser.set_defaults(use_cache=False)
     parser.set_defaults(debug=False)
     args = parser.parse_args()
-
-    if not OAUTH_TOKEN:
-        raise Exception("OAUTH_TOKEN is required (check your .env file).")
 
     # configure logging
     loggingConfig = {'filename': 'output.log', 'level': logging.INFO}
@@ -295,9 +288,12 @@ def main():
     # fetch and process the data
     logging.debug("Begin.")
     data = load(args.course_id, cache_file, use_cache=args.use_cache)
-    results = process(data)
-    cache_write(results_json_file, results)
-    create_spreadsheet(results_xls_file, data, results)
+    if len(data['students']) == 0:
+        logging.info("No students found in the course, so can't generate a report.")
+    else:
+        results = process(data)
+        cache_write(results_json_file, results)
+        create_spreadsheet(results_xls_file, data, results)
     logging.debug("Done.")
 
 if __name__ == "__main__":
