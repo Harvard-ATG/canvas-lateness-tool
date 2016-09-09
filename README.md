@@ -72,7 +72,7 @@ Note that assignments will only be included in the spreadsheet if they meet the 
 
 ### Sheet 2
 
-| Students    | Total (compact) | Total (hours) | Total (seconds) |
+| Students    |Total in hours | Total in seconds |
 |-------------|-----------------|---------------|-----------------|
-| Last, First | 2d83414s        | 71            | 256214          |
-|             |                 |               |                 |
+| Last, First |71            | 256214          |
+|             |               |                 |
