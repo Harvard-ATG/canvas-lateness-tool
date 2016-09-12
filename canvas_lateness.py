@@ -202,9 +202,14 @@ def create_spreadsheet(filename, data, results):
     bold_style = xlwt.easyxf('font: bold 1')
     right_align = xlwt.easyxf("align: horiz right")
     delta_style = xlwt.easyxf(num_format_str='[Red]###,###,##0;[Blue]-###,###,##0;[Black]0')
+    date_style = xlwt.easyxf(num_format_str='dd-mmm-yy h:mm:ss AM/PM')
 
+    # Formats
     student_fmt = u'{sortable_name} ({id})'
     student_width = 256 * max([len(student_fmt.format(**s)) for s in data['students']])
+
+    # Helper functions
+    parse_iso_date = lambda d: dateutil.parser.parse(d).replace(tzinfo=UTC_TZ).astimezone(EST_TZ).replace(tzinfo=None)
 
     # Create workbook
     wb = xlwt.Workbook(encoding="utf-8")
@@ -222,10 +227,17 @@ def create_spreadsheet(filename, data, results):
 
         for asstpos, asst in enumerate(result['assignments']):
             assignment_name_str = u'{name} ({id})'.format(name=asst['assignment_name'], id=asst['assignment_id'])
+            due_date = parse_iso_date(asst['due_date_iso'])
+            sub_date = '' if not asst['submission_date_iso'] else parse_iso_date(asst['submission_date_iso'])
             columns = (
-                ('Due', asst['due_date_iso']),
-                ('Submitted', asst['submission_date_iso']),
+                ('Due', due_date, date_style),
+                ('Submitted', sub_date, date_style),
                 ('Delta (seconds)', asst['time_delta_seconds'], delta_style),
+            )
+            column_widths = (
+                (256 * len(asst['due_date_iso'])),
+                (256 * len(asst['due_date_iso'])),
+                (256 * len(columns[-1][0])),
             )
             colstart = asstpos * len(columns) + 1
 
@@ -233,6 +245,7 @@ def create_spreadsheet(filename, data, results):
             for colpos, column in enumerate(columns):
                 ws.write(1, colstart+colpos, column[0], bold_style) # column header
                 ws.write(row, colstart+colpos, *column[1:]) # column value for student
+                ws.col(colstart+colpos).width = column_widths[colpos]
         row += 1
 
     # Worksheet #2 w/ Cumulative Lateness
@@ -240,7 +253,7 @@ def create_spreadsheet(filename, data, results):
     ws.col(0).width = student_width
     ws.write(0,0, u'Students'.encode('utf-8'), bold_style)
 
-    row = 2
+    row = 1
     for result in results:
         student_name_str = student_fmt.format(sortable_name=result['student_name'], id=result['student_id']) 
         ws.write(row, 0, student_name_str)
