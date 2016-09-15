@@ -6,14 +6,13 @@ This is a command-line tool written in [python](https://www.python.org/) that us
 
 ### Setup Environment
 
-To get started, you will need to setup your [python virtual environment](http://docs.python-guide.org/en/latest/dev/virtualenvs/) and then install the required python dependencies specified in the `requirements.txt` file:
+To get started, install the required python dependencies specified in the `requirements.txt` file:
 
 ```sh
-$ virtualenv pyenv                  # create your virtual environment
-$ source pyenv/bin/activate         # activate it
 $ pip install -r requirements.txt   # install required dependencies
 ```
-Then you will need to update your `.env` config with your personal `OAUTH_TOKEN`, which is required to authenticate with the Canvas API. To obtain a token, go to [your Canvas profile](https://canvas.harvard.edu/profile) and navigate to your [profile settings](https://canvas.harvard.edu/profile/settings). At the bottom of the settings page, you should see a button to create a **New Access Token**. When you click the button, it should open a dialog containing an access token. Copy and paste this value into your `.env` file such that `OAUTH_TOKEN="your_secret_token"`.
+
+Now update the `.env` file with your personal `OAUTH_TOKEN`, which is required to authenticate with the Canvas API. To obtain a token, go to [your Canvas profile](https://canvas.harvard.edu/profile) and navigate to your [profile settings](https://canvas.harvard.edu/profile/settings). At the bottom of the settings page, you should see a button to create a **New Access Token**. When you click the button, it should open a dialog containing an access token. Copy and paste this value into your `.env` file such that `OAUTH_TOKEN="your_secret_token"`.
 
 ```sh
 $ cp -v .env.example .env  # copy example configuration
@@ -27,8 +26,26 @@ At this point you should have all required python dependencies and the required 
 The script takes a canvas course ID as input and then generates a report (an Excel spreadsheet and JSON file):
 
 ```sh
-$ python canvas_lateness.py
-usage: canvas_lateness.py [-h] [--use_cache] [--debug] course_id
+$ python canvas_lateness.py --help
+usage: canvas_lateness.py [-h] [--student_name {huid,name}] [--use_cache]
+                          [--debug]
+                          course_id
+
+Generates a spreadsheet with student submission timestamps for each
+assignment. Late submissions are called out in red, while on time submissions
+are in blue.
+
+positional arguments:
+  course_id             Canvas Course ID.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --student_name {huid,name}
+                        Choose whether to display student name or HUID in the
+                        results. (default: huid)
+  --use_cache           Use cached data rather than fetching from the API, if
+                        it is available. (default: False)
+  --debug               Log debugging information. (default: False)
 ```
 
 Example:
@@ -51,6 +68,12 @@ You can then open the generated spreadsheet:
 
 ```sh
 $ open 39-results-20160909.xls
+```
+
+The results will display the student HUID by default, but if you would like to use the student names instead, you can use the `--student_name` option:
+
+```sh
+python canvas_lateness 39 --student_name name
 ```
 
 ##Excel Export
