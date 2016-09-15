@@ -24,8 +24,17 @@ def api_get_students_list(request_context, course_id):
     '''
     logging.info("API fetching students for course: %s" % course_id)
     results = get_all_list_data(request_context, courses.list_users_in_course_users, course_id, "email", enrollment_type="student")
-    students = sorted([{"sortable_name":x['sortable_name'], "id": x['id']} for x in results], key=lambda x: x['sortable_name'])
+
+    # reduce the student data to the subset that we need
+    students = [{
+        "id":             x['id'],           # canvas ID for user 
+        "sis_user_id":    x['sis_user_id'],  # huid from student information systems 
+        "sortable_name":  x['sortable_name'], 
+        "name":           x['name'],
+    } for x in results]
+
     logging.debug("Students in course: %s" % students)
+
     return list(students)
 
 def api_get_assignments_list(request_context, course_id):
@@ -77,15 +86,22 @@ def load(course_id, cache_file, use_cache=False):
 
     return data
 
-def process(data):
+def process(data, name_choice='huid'):
     '''
     Transforms the raw data retrieved from the API into data about each student's "lateness"
     for each assignment. The data is returned in a format suitable for output. 
     '''
 
-    student_dict = dict([(s['id'], s['sortable_name']) for s in data['students']])
+    # initialize 
     assignment_ids = [a['id'] for a in data['assignments']]
     zero_delta = datetime.timedelta(days=0, seconds=0, microseconds=0)
+
+    # configures the student name that should be used
+    name_choices_dict = {
+        'huid': {'field': 'sis_user_id', 'sortkey': lambda s: s['sis_user_id']},
+        'name': {'field': 'sortable_name', 'sortkey': lambda s: s['sortable_name']},
+    }
+    name_descriptor = name_choices_dict.get(name_choice, 'huid')
 
     # group submissions by assignment and student for easy lookup
     submissions_by_assignment = {}
@@ -102,11 +118,11 @@ def process(data):
     # aggregate the results
     results = []
     display_date_format = '%a, %b %d at %I:%M%p'
-    for student in sorted(data['students'], key=lambda s: s['sortable_name']):
+    for student in sorted(data['students'], key=name_descriptor['sortkey']):
         student_id = student['id']
         student_result = {
             'student_id': student_id, 
-            'student_name': student['sortable_name'], 
+            'student_name': student.get(name_descriptor['field']), 
             'assignments': [],
         }
         total_lateness = zero_delta
@@ -205,8 +221,8 @@ def create_spreadsheet(filename, data, results):
     date_style = xlwt.easyxf(num_format_str='dd-mmm-yy h:mm:ss AM/PM')
 
     # Formats
-    student_fmt = u'{sortable_name} ({id})'
-    student_width = 256 * max([len(student_fmt.format(**s)) for s in data['students']])
+    student_fmt = u'{student_name}'
+    student_width = 256 * max([len(student_fmt.format(**r)) for r in results] + [12]) # magic num to ensure min width
 
     # Helper functions
     parse_iso_date = lambda d: dateutil.parser.parse(d).replace(tzinfo=UTC_TZ).astimezone(EST_TZ).replace(tzinfo=None)
@@ -222,7 +238,7 @@ def create_spreadsheet(filename, data, results):
 
     row = 2
     for result in results:
-        student_name_str = student_fmt.format(sortable_name=result['student_name'], id=result['student_id']) 
+        student_name_str = student_fmt.format(student_name=result['student_name']) 
         ws.write(row, 0, student_name_str)
 
         for asstpos, asst in enumerate(result['assignments']):
@@ -255,7 +271,7 @@ def create_spreadsheet(filename, data, results):
 
     row = 1
     for result in results:
-        student_name_str = student_fmt.format(sortable_name=result['student_name'], id=result['student_id']) 
+        student_name_str = student_fmt.format(student_name=result['student_name']) 
         ws.write(row, 0, student_name_str)
         columns = (
             ('Total in hours', result['total_lateness_hours'], delta_style),
@@ -272,10 +288,11 @@ def create_spreadsheet(filename, data, results):
 
 def main():
     # get CLI args
-    parser = argparse.ArgumentParser(description="Export lateness data for each student's assignment")
-    parser.add_argument('course_id', help='Canvas Course ID')
-    parser.add_argument('--use_cache',  dest='use_cache', action='store_true', help="Use cached data (if available) rather than fetching from the API")
-    parser.add_argument('--debug',  dest='debug', action='store_true', help="Log debug output")
+    parser = argparse.ArgumentParser(description="Generates a spreadsheet with student submission timestamps for each assignment. Late submissions are called out in red, while on time submissions are in blue.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('course_id', help='Canvas Course ID.')
+    parser.add_argument('--student_name', choices=['huid', 'name'], default='huid', help="Choose whether to display student name or HUID in the results. ")
+    parser.add_argument('--use_cache',  dest='use_cache', action='store_true', help="Use cached data rather than fetching from the API, if it is available.")
+    parser.add_argument('--debug',  dest='debug', action='store_true', help="Log debugging information. ")
     parser.set_defaults(use_cache=False)
     parser.set_defaults(debug=False)
     args = parser.parse_args()
@@ -304,7 +321,7 @@ def main():
     if len(data['students']) == 0:
         logging.info("No students found in the course, so can't generate a report.")
     else:
-        results = process(data)
+        results = process(data, name_choice=args.student_name)
         cache_write(results_json_file, results)
         create_spreadsheet(results_xls_file, data, results)
     logging.debug("Done.")
