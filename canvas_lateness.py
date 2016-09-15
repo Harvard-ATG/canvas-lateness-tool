@@ -86,7 +86,7 @@ def load(course_id, cache_file, use_cache=False):
 
     return data
 
-def process(data, name_choice='huid'):
+def process(data, student_identifier=None):
     '''
     Transforms the raw data retrieved from the API into data about each student's "lateness"
     for each assignment. The data is returned in a format suitable for output. 
@@ -96,12 +96,12 @@ def process(data, name_choice='huid'):
     assignment_ids = [a['id'] for a in data['assignments']]
     zero_delta = datetime.timedelta(days=0, seconds=0, microseconds=0)
 
-    # configures the student name that should be used
-    name_choices_dict = {
+    # configures the student identifier that should be used
+    student_identifier_choices = {
         'huid': {'field': 'sis_user_id', 'sortkey': lambda s: s['sis_user_id']},
         'name': {'field': 'sortable_name', 'sortkey': lambda s: s['sortable_name']},
     }
-    name_descriptor = name_choices_dict.get(name_choice, 'huid')
+    student_descriptor = student_identifier_choices.get(student_identifier, student_identifier_choices['huid'])
 
     # group submissions by assignment and student for easy lookup
     submissions_by_assignment = {}
@@ -118,11 +118,11 @@ def process(data, name_choice='huid'):
     # aggregate the results
     results = []
     display_date_format = '%a, %b %d at %I:%M%p'
-    for student in sorted(data['students'], key=name_descriptor['sortkey']):
+    for student in sorted(data['students'], key=student_descriptor['sortkey']):
         student_id = student['id']
         student_result = {
             'student_id': student_id, 
-            'student_name': student.get(name_descriptor['field']), 
+            'student_name': student.get(student_descriptor['field']), 
             'assignments': [],
         }
         total_lateness = zero_delta
@@ -290,7 +290,7 @@ def main():
     # get CLI args
     parser = argparse.ArgumentParser(description="Generates a spreadsheet with student submission timestamps for each assignment. Late submissions are called out in red, while on time submissions are in blue.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('course_id', help='Canvas Course ID.')
-    parser.add_argument('--student_name', choices=['huid', 'name'], default='huid', help="Choose whether to display student name or HUID in the results. ")
+    parser.add_argument('--student_identifier', choices=['huid', 'name'], default='huid', help="Choose to identify students by name or HUID in the results.")
     parser.add_argument('--use_cache',  dest='use_cache', action='store_true', help="Use cached data rather than fetching from the API, if it is available.")
     parser.add_argument('--debug',  dest='debug', action='store_true', help="Log debugging information. ")
     parser.set_defaults(use_cache=False)
@@ -321,7 +321,7 @@ def main():
     if len(data['students']) == 0:
         logging.info("No students found in the course, so can't generate a report.")
     else:
-        results = process(data, name_choice=args.student_name)
+        results = process(data, student_identifier=args.student_identifier)
         cache_write(results_json_file, results)
         create_spreadsheet(results_xls_file, data, results)
     logging.debug("Done.")

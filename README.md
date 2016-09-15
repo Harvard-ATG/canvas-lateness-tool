@@ -27,8 +27,8 @@ The script takes a canvas course ID as input and then generates a report (an Exc
 
 ```sh
 $ python canvas_lateness.py --help
-usage: canvas_lateness.py [-h] [--student_name {huid,name}] [--use_cache]
-                          [--debug]
+usage: canvas_lateness.py [-h] [--student_identifier {huid,name}]
+                          [--use_cache] [--debug]
                           course_id
 
 Generates a spreadsheet with student submission timestamps for each
@@ -40,8 +40,8 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  --student_name {huid,name}
-                        Choose whether to display student name or HUID in the
+  --student_identifier {huid,name}
+                        Choose to identify students by name or HUID in the
                         results. (default: huid)
   --use_cache           Use cached data rather than fetching from the API, if
                         it is available. (default: False)
