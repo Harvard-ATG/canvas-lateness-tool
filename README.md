@@ -90,12 +90,12 @@ Note that assignments will only be included in the spreadsheet if they meet the 
 | Assignment  | Week 1 Assignment    |                      |                 | Week 2 Assignment    |                      |                 |
 |-------------|----------------------|----------------------|-----------------|----------------------|----------------------|-----------------|
 | Students    | Due                  | Submitted            | Delta (seconds) | Due                  | Submitted            | Delta (seconds) |
-| Last, First | 2016-04-12T03:59:00Z | 2016-04-12T18:47:08Z | 53288           | 2016-05-10T03:59:00Z | 2016-05-10T00:54:33Z | -11067          |
+| HUID or Name | 12-Sep-16 11:59:00 PM | 13-Sep-16 8:04:45 PM | 72,345           | 15-Sep-16 11:59:00 PM | 03-Sep-16 5:52:31 PM | -1,058,789          |
 |             |                      |                      |                 |                      |                      |                 |
 
 ### Sheet 2
 
 | Students    |Total in hours | Total in seconds |
 |-------------|-----------------|---------------|-----------------|
-| Last, First |71            | 256214          |
+| HUID or Name |20            | 72,345          |
 |             |               |                 |
