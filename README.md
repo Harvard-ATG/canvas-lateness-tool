@@ -70,10 +70,10 @@ You can then open the generated spreadsheet:
 $ open 39-results-20160909.xls
 ```
 
-The results will display the student HUID by default, but if you would like to use the student names instead, you can use the `--student_name` option:
+If you would like students to be identified by name rather than HUID, you can use the `--student_identifier` option:
 
 ```sh
-python canvas_lateness 39 --student_name name
+python canvas_lateness 39 --student_identifier name
 ```
 
 ##Excel Export
